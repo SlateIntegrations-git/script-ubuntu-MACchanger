@@ -1,0 +1,53 @@
+# 1. Create the Script
+sudo tee /usr/local/bin/set-static-mac.sh > /dev/null << 'EOF'
+#!/bin/bash
+#################### CHANGE THE TWO PARAMETERS BETWEEN THESE HASH MARKS ####################
+IFACE="eth0" # <--- REPLACE THIS WITH YOUR TARGET INTERFACE
+TARGET_MAC="00:11:22:33:44:55" # <--- REPLACE THIS WITH YOUR LICENSED MAC
+############################################################################################
+
+
+##### NOTHING BELOW NEEDS CHANGED #####
+# Check if interface exists
+if ! ip link show "$IFACE" > /dev/null 2>&1; then
+    echo "Interface $IFACE not found."
+    exit 1
+fi
+
+OLD_MAC=$(ip link show $IFACE | grep ether | awk '{print $2}')
+
+# Set the MAC
+ip link set $IFACE down
+ip link set $IFACE address $TARGET_MAC
+ip link set $IFACE up
+
+echo "[+] MAC set to static: $OLD_MAC -> $TARGET_MAC"
+EOF
+
+# 2. Make it Executable
+sudo chmod +x /usr/local/bin/set-static-mac.sh
+
+# 3. Create the Systemd Service
+sudo tee /etc/systemd/system/set-static-mac.service > /dev/null << 'EOF'
+[Unit]
+Description=Set Static MAC Address for Licensing
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/set-static-mac.sh
+TimeoutStartSec=0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 4. Reload Daemon and Enable
+sudo systemctl daemon-reload
+sudo systemctl enable set-static-mac.service
+
+# 5. Start immediately (WARNING: Will reset connection if on eth0)
+# sudo systemctl start set-static-mac.service
+echo "Setup complete. The MAC will be set automatically on the next reboot."
